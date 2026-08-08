@@ -1,0 +1,5 @@
+/* written by Claude — 2026-07-17 — window guide.
+   accent-color has no Webflow Style panel control, so this one declaration has
+   to live here to make the card tick red. Everything else about the result card
+   is a real element in the Designer (Result Card Template) — style it there. */
+  #window-guide .wg-result-checkbox { accent-color: #E4291E; }

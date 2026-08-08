@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Window Guide — dev harness</title>
+<style>
+  :root { --red:#E4291E; --ink:#1c1c1c; --line:#dcdcdc; --bg:#f5f5f5; }
+  * { box-sizing:border-box; }
+  body { font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; color:var(--ink); margin:0; background:var(--bg); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#666; margin:0 0 20px; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:6px; padding:18px; margin-bottom:18px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:#666; margin:0 0 14px; font-weight:600; }
+  button.act { background:var(--red); color:#fff; border:0; border-radius:4px; padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+  button.act.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  button.act:disabled { opacity:.5; cursor:default; }
+
+  /* ---- structural hooks the script requires. Deliberately plain: this is a
+     dev rig, not a visual copy of the Webflow page. Only the selectors matter. */
+  #window-guide { background:#fff; border:1px solid var(--line); border-radius:6px; padding:18px; }
+  .wg-progress { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .wg-progress-track { flex:1; height:6px; background:#eee; border-radius:3px; overflow:hidden; }
+  .wg-progress-fill { height:6px; width:0; background:var(--red); transition:width .2s; }
+  #wg-progress-text { font-size:12px; color:#666; min-width:96px; }
+  .wg-stages { display:flex; flex-direction:column; gap:10px; }
+  .wg-stage { border:1px solid var(--line); border-radius:4px; padding:12px; }
+  .wg-stage.is-active { border-color:var(--red); }
+  .wg-stage.is-complete { background:#fafafa; }
+  .wg-stage-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .wg-badge { width:22px; height:22px; border-radius:50%; background:#eee; display:grid; place-items:center; font-size:12px; font-weight:600; }
+  .wg-stage.is-complete .wg-badge { background:var(--red); color:#fff; }
+  .wg-q { font-weight:600; }
+  .wg-options { display:flex; flex-wrap:wrap; gap:6px; }
+  .wg-option { background:#fff; border:1px solid var(--line); border-radius:3px; padding:7px 12px; font-size:13px; cursor:pointer; text-decoration:none; color:var(--ink); }
+  .wg-option.is-selected { background:var(--red); border-color:var(--red); color:#fff; }
+  .wg-summary { display:flex; align-items:center; gap:10px; font-size:13px; color:#555; }
+  .wg-change { font-size:12px; color:var(--red); cursor:pointer; text-decoration:underline; }
+  #wg-result { margin-top:18px; }
+  .wg-result-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
+  .wg-result-option { border:1px solid var(--line); border-radius:4px; padding:12px; }
+  .wg-result-option.is-checked { border-color:var(--red); }
+  .wg-result-checkbox { accent-color:var(--red); }
+  .wg-result-name { font-weight:600; margin:6px 0 2px; }
+  .wg-price-band { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:#888; }
+  .wg-result-desc { font-size:13px; color:#555; margin:6px 0; }
+  .wg-result-tags { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+  .wg-tag { font-size:11px; background:#f0f0f0; border-radius:2px; padding:2px 7px; }
+  .wg-tag.is-muted { color:#999; font-style:italic; }
+  .wg-result-caveat { font-size:12px; background:#fdf6e3; border:1px solid #f0e0b0; border-radius:3px; padding:8px; margin-top:8px; }
+  .is-hidden { display:none !important; }
+  .wg-form-fields { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:14px; }
+  .wg-input { border:1px solid var(--line); border-radius:3px; padding:8px; font-size:13px; width:100%; }
+  #wg-done-links { margin-top:12px; padding:12px; background:#f0f7f0; border:1px solid #cfe0cf; border-radius:4px; }
+  .wg-result-link { display:block; color:var(--red); margin:3px 0; }
+
+  /* ---- inspector + matrix ---- */
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#777; border-bottom:1.5px solid #333; padding:6px 8px 6px 0; position:sticky; top:0; background:#fff; }
+  td { padding:5px 8px 5px 0; border-bottom:1px solid #eee; vertical-align:top; }
+  tr.flag td { background:#fff6f5; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+  .field-row { display:grid; grid-template-columns:130px 1fr; gap:8px; padding:4px 0; border-bottom:1px solid #f0f0f0; }
+  .field-row b { font-weight:600; color:#555; }
+  .scroll { max-height:460px; overflow:auto; }
+  .stat { display:inline-block; margin-right:18px; font-size:13px; }
+  .stat b { font-size:17px; display:block; }
+  .warn { color:#b3261e; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Window Guide — dev harness</h1>
+  <p class="sub">Runs <span class="mono">window-guide.js</span> outside Webflow. The markup below carries only the selectors the script queries, so behaviour matches the live page even though the styling does not.</p>
+
+  <div class="panel">
+    <h2>Script source</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input class="wg-input mono" id="src-url" style="flex:1;min-width:340px" value="./window-guide.js">
+      <button class="act ghost" id="reload-src">Load</button>
+      <span id="src-state" style="font-size:12px;color:#666"></span>
+    </div>
+    <p style="font-size:12px;color:#666;margin:10px 0 0">
+      Point this at a jsDelivr URL to test CDN delivery, e.g.
+      <span class="mono">https://cdn.jsdelivr.net/gh/USER/REPO@TAG/window-guide.js</span>.
+      Reloading swaps the script and rebuilds the guide from scratch.
+    </p>
+  </div>
+
+  <!-- ==================== THE GUIDE ==================== -->
+  <div id="guide-host">
+  <div id="window-guide">
+
+    <div class="wg-progress">
+      <div class="wg-progress-track"><div class="wg-progress-fill"></div></div>
+      <div id="wg-progress-text"></div>
+    </div>
+
+    <a href="#" data-wg="start" class="wg-start act" style="display:inline-block;background:#E4291E;color:#fff;padding:9px 16px;border-radius:4px;text-decoration:none;font-weight:600">Get instant Advice</a>
+
+    <div class="wg-stages">
+
+      <div class="wg-stage" data-step="1">
+        <div class="wg-stage-head"><span class="wg-badge">1</span><span class="wg-q">What sort of property is it?</span></div>
+        <div class="wg-summary"><span class="wg-summary-text"></span><a href="#" class="wg-change" data-wg="change">change</a></div>
+        <div class="wg-options">
+          <a href="#" class="wg-option" data-value="period">Period / traditional</a>
+          <a href="#" class="wg-option" data-value="modern">Modern</a>
+          <a href="#" class="wg-option" data-value="conservation">Conservation / planning restrictions</a>
+        </div>
+      </div>
+
+      <div class="wg-stage" data-step="2">
+        <div class="wg-stage-head"><span class="wg-badge">2</span><span class="wg-q">What matters most?</span></div>
+        <div class="wg-summary"><span class="wg-summary-text"></span><a href="#" class="wg-change" data-wg="change">change</a></div>
+        <div class="wg-options">
+          <a href="#" class="wg-option" data-value="value">Best value for money</a>
+          <a href="#" class="wg-option" data-value="traditional">Traditional appearance</a>
+          <a href="#" class="wg-option" data-value="contemporary">Contemporary / slim frames</a>
+          <a href="#" class="wg-option" data-value="guarantee">Low maintenance &amp; long guarantees</a>
+        </div>
+      </div>
+
+      <div class="wg-stage" data-step="3">
+        <div class="wg-stage-head"><span class="wg-badge">3</span><span class="wg-q">What's your budget?</span></div>
+        <div class="wg-summary"><span class="wg-summary-text"></span><a href="#" class="wg-change" data-wg="change">change</a></div>
+        <div class="wg-options">
+          <a href="#" class="wg-option" data-value="cost_effective">Most cost-effective</a>
+          <a href="#" class="wg-option" data-value="mid_range">Mid-range</a>
+          <a href="#" class="wg-option" data-value="premium">Premium finish</a>
+          <a href="#" class="wg-option" data-value="open">Open to options</a>
+        </div>
+      </div>
+
+      <div class="wg-stage" data-step="4">
+        <div class="wg-stage-head"><span class="wg-badge">4</span><span class="wg-q">Which style?</span></div>
+        <div class="wg-summary"><span class="wg-summary-text"></span><a href="#" class="wg-change" data-wg="change">change</a></div>
+        <div class="wg-options">
+          <a href="#" class="wg-option" data-value="casement">Casement</a>
+          <a href="#" class="wg-option" data-value="sash">Sliding sash</a>
+          <a href="#" class="wg-option" data-value="tilt_turn">Tilt &amp; turn</a>
+          <a href="#" class="wg-option" data-value="bay">Bay</a>
+          <a href="#" class="wg-option" data-value="gable">Gable</a>
+          <a href="#" class="wg-option" data-value="secondary">Secondary glazing</a>
+          <a href="#" class="wg-option" data-value="guide">Guide me</a>
+        </div>
+      </div>
+
+    </div><!-- /.wg-stages -->
+
+    <div id="wg-result" style="display:none">
+      <div class="wg-result-options">
+        <!-- Card template. The script clones the first of these and clears the
+             container on init, exactly as it does in Webflow. -->
+        <div class="wg-result-option">
+          <input type="checkbox" class="wg-result-checkbox">
+          <div class="wg-price-band">band</div>
+          <div class="wg-result-name">name</div>
+          <div class="wg-result-desc">desc</div>
+          <div class="wg-result-tags"><span class="wg-tag">tag</span></div>
+          <div class="wg-result-caveat"></div>
+        </div>
+      </div>
+
+      <form class="wg-form">
+        <div class="wg-form-fields">
+          <input class="wg-input" type="text"  name="Name"      placeholder="Your name">
+          <input class="wg-input" type="email" name="Email"     placeholder="Your email">
+          <input class="wg-input" type="text"  name="Postcode"  placeholder="Your postcode">
+          <input class="wg-input" type="tel"   name="Telephone" placeholder="Your telephone">
+        </div>
+
+        <!-- Output-only hidden fields. Names must match the script exactly. -->
+        <input type="hidden" name="Property">
+        <input type="hidden" name="Priority">
+        <input type="hidden" name="Budget">
+        <input type="hidden" name="Style">
+        <input type="hidden" name="Recommended">
+        <input type="hidden" name="Selected">
+        <input type="hidden" name="Changed">
+        <input type="hidden" name="Source">
+
+        <button class="act" type="submit" style="margin-top:12px">Get a quote</button>
+      </form>
+
+      <div id="wg-done-links">
+        <a href="#" class="wg-result-link">link prototype</a>
+      </div>
+    </div><!-- /#wg-result -->
+
+  </div><!-- /#window-guide -->
+  </div><!-- /#guide-host -->
+
+  <!-- ==================== INSPECTOR ==================== -->
+  <div class="panel" style="margin-top:18px">
+    <h2>Hidden field values <span style="text-transform:none;letter-spacing:0;font-weight:400">— exactly what lands in the enquiry email</span></h2>
+    <div id="inspector"></div>
+  </div>
+
+  <!-- ==================== MATRIX ==================== -->
+  <div class="panel">
+    <h2>Recommendation matrix</h2>
+    <p style="font-size:13px;color:#555;margin:0 0 12px">
+      Walks all 336 answer paths (3 × 4 × 4 × 7), driving the real UI and reading the real output fields.
+      Rows are flagged where the customer named a specific style but nothing recommended actually offers it.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <button class="act" id="run-matrix">Run all 336</button>
+      <button class="act ghost" id="only-flagged">Show flagged only</button>
+      <button class="act ghost" id="download-csv">Download CSV</button>
+      <span id="matrix-state" style="font-size:12px;color:#666"></span>
+    </div>
+    <div id="matrix-stats" style="margin-bottom:14px"></div>
+    <div class="scroll"><table id="matrix"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+</div>
+
+<script>
+// =============================================================================
+// Webflow shim. The real script does `window.Webflow = window.Webflow || []`
+// then `.push(fn)`. Webflow's own runtime replaces that array with an object
+// whose push() executes immediately once the DOM is ready. Here it stays a plain
+// array and we drain it ourselves, which gives us control over re-initialising
+// when the script is reloaded from a different source.
+// =============================================================================
+window.Webflow = [];
+
+// Pristine copy of the guide markup, so a script reload starts from clean DOM
+// rather than whatever state the previous run left behind.
+const PRISTINE = document.getElementById('guide-host').innerHTML;
+
+// Test-only mirror of META.styles from window-guide.js. Used purely to flag
+// style mismatches in the matrix — it is NOT used by the guide itself. If the
+// styles list in the script changes, update this too or the flags will lie.
+const STYLE_SUPPORT = {
+  "REHAU Flush uPVC Casement Windows":      ["casement","bay"],
+  "Quickslide uPVC Sliding Sash Windows":   ["sash"],
+  "Masterframe NEOsash uPVC Windows":       ["sash"],
+  "Origin Aluminium Windows":               ["casement","tilt_turn","bay","gable"],
+  "Granada Secondary Glazing":              ["secondary"]
+};
+
+const STEPS = [
+  ["period","modern","conservation"],
+  ["value","traditional","contemporary","guarantee"],
+  ["cost_effective","mid_range","premium","open"],
+  ["casement","sash","tilt_turn","bay","gable","secondary","guide"]
+];
+const FIELDS = ["Property","Priority","Budget","Style","Recommended","Selected","Changed","Source"];
+
+let currentScriptEl = null;
+let matrixRows = [];
+let flaggedOnly = false;
+
+function fieldValue(name) {
+  const el = document.querySelector(`#window-guide input[name="${name}"]`);
+  return el ? el.value : "(field missing)";
+}
+
+function renderInspector() {
+  document.getElementById('inspector').innerHTML = FIELDS.map(f => {
+    const v = fieldValue(f);
+    return `<div class="field-row"><b>${f}</b><span>${v ? v : '<i style="color:#aaa">empty</i>'}</span></div>`;
+  }).join('');
+}
+
+// Reload the guide script from whatever URL is in the box, resetting the DOM
+// first so nothing carries over between runs.
+function loadScript(url) {
+  const state = document.getElementById('src-state');
+  state.textContent = 'loading…';
+  document.getElementById('guide-host').innerHTML = PRISTINE;
+  if (currentScriptEl) currentScriptEl.remove();
+  window.Webflow = [];
+
+  const s = document.createElement('script');
+  s.src = url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+  s.onload = () => {
+    const queued = window.Webflow.slice();
+    window.Webflow = [];
+    queued.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+    state.textContent = `loaded — ${queued.length} init fn(s)`;
+    state.style.color = '#2b7a2b';
+    wireInspector();
+    renderInspector();
+  };
+  s.onerror = () => { state.textContent = 'failed to load'; state.style.color = '#b3261e'; };
+  document.body.appendChild(s);
+  currentScriptEl = s;
+}
+
+// Refresh the inspector after anything that could change field values. Uses
+// capture so it runs after the guide's own handlers have written the fields.
+function wireInspector() {
+  const host = document.getElementById('window-guide');
+  ['click','change'].forEach(ev =>
+    host.addEventListener(ev, () => setTimeout(renderInspector, 0))
+  );
+  const form = host.querySelector('form');
+  if (form) form.addEventListener('submit', e => {
+    e.preventDefault();
+    setTimeout(renderInspector, 0);
+  });
+}
+
+// --- matrix ------------------------------------------------------------------
+function runOne(combo) {
+  document.querySelector('#window-guide [data-wg="start"]').click();
+  combo.forEach((val, i) => {
+    const stage = document.querySelector(`#window-guide .wg-stage[data-step="${i+1}"]`);
+    const opt = stage.querySelector(`.wg-option[data-value="${val}"]`);
+    if (opt) opt.click();
+  });
+  const recommended = fieldValue("Recommended");
+  const names = recommended === "(none)" ? [] : recommended.split(", ").filter(Boolean);
+  const style = combo[3];
+  // "guide" means no specific style was requested, so nothing to mismatch.
+  const mismatch = style !== "guide" &&
+    names.length > 0 &&
+    !names.some(n => (STYLE_SUPPORT[n] || []).includes(style));
+  return { combo, names, recommended, count: names.length, mismatch };
+}
+
+function runMatrix() {
+  const btn = document.getElementById('run-matrix');
+  btn.disabled = true;
+  document.getElementById('matrix-state').textContent = 'running…';
+  matrixRows = [];
+  const t0 = performance.now();
+  for (const a of STEPS[0]) for (const b of STEPS[1]) for (const c of STEPS[2]) for (const d of STEPS[3]) {
+    matrixRows.push(runOne([a,b,c,d]));
+  }
+  const ms = Math.round(performance.now() - t0);
+  document.getElementById('matrix-state').textContent = `${matrixRows.length} paths in ${ms}ms`;
+  btn.disabled = false;
+  renderStats();
+  renderMatrix();
+  renderInspector();
+}
+
+function renderStats() {
+  const appear = {};
+  Object.keys(STYLE_SUPPORT).forEach(n => appear[n] = 0);
+  let short = 0, flagged = 0;
+  matrixRows.forEach(r => {
+    r.names.forEach(n => { appear[n] = (appear[n] || 0) + 1; });
+    if (r.count < 3) short++;
+    if (r.mismatch) flagged++;
+  });
+  const never = Object.entries(appear).filter(([,v]) => v === 0).map(([k]) => k);
+  document.getElementById('matrix-stats').innerHTML =
+    `<span class="stat"><b>${matrixRows.length}</b>paths</span>` +
+    `<span class="stat"><b class="${flagged?'warn':''}">${flagged}</b>style mismatches</span>` +
+    `<span class="stat"><b class="${short?'warn':''}">${short}</b>fewer than 3 results</span>` +
+    `<span class="stat"><b class="${never.length?'warn':''}">${never.length}</b>products never shown</span>` +
+    `<div style="margin-top:10px;font-size:12px;color:#555">` +
+      Object.entries(appear).sort((a,b)=>b[1]-a[1])
+        .map(([k,v]) => `${k}: <b>${v}</b> (${Math.round(v/matrixRows.length*100)}%)`).join(' &nbsp;·&nbsp; ') +
+    `</div>` +
+    (never.length ? `<div class="warn" style="margin-top:8px;font-size:12px">Never recommended: ${never.join(', ')}</div>` : '');
+}
+
+function renderMatrix() {
+  const rows = flaggedOnly ? matrixRows.filter(r => r.mismatch) : matrixRows;
+  document.querySelector('#matrix thead').innerHTML =
+    '<tr><th>Property</th><th>Priority</th><th>Budget</th><th>Style</th><th>Recommended (in order)</th><th>#</th></tr>';
+  document.querySelector('#matrix tbody').innerHTML = rows.map(r => `
+    <tr class="${r.mismatch ? 'flag' : ''}">
+      <td class="mono">${r.combo[0]}</td>
+      <td class="mono">${r.combo[1]}</td>
+      <td class="mono">${r.combo[2]}</td>
+      <td class="mono">${r.combo[3]}${r.mismatch ? ' <span class="warn">✗</span>' : ''}</td>
+      <td>${r.names.join(' · ') || '<i>none</i>'}</td>
+      <td>${r.count}</td>
+    </tr>`).join('');
+}
+
+function downloadCsv() {
+  if (!matrixRows.length) return;
+  const esc = s => `"${String(s).replace(/"/g,'""')}"`;
+  const csv = ['property,priority,budget,style,recommended,count,style_mismatch']
+    .concat(matrixRows.map(r => [
+      r.combo[0], r.combo[1], r.combo[2], r.combo[3],
+      esc(r.names.join(' | ')), r.count, r.mismatch ? 'yes' : 'no'
+    ].join(',')))
+    .join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'window-guide-matrix.csv';
+  a.click();
+}
+
+document.getElementById('reload-src').addEventListener('click', () =>
+  loadScript(document.getElementById('src-url').value.trim()));
+document.getElementById('run-matrix').addEventListener('click', runMatrix);
+document.getElementById('only-flagged').addEventListener('click', e => {
+  flaggedOnly = !flaggedOnly;
+  e.target.textContent = flaggedOnly ? 'Show all' : 'Show flagged only';
+  renderMatrix();
+});
+document.getElementById('download-csv').addEventListener('click', downloadCsv);
+
+loadScript('./window-guide.js');
+</script>
+</body>
+</html>
