@@ -12,8 +12,28 @@ Live on `/windows/windows-overview`.
 |---|---|
 | `window-guide.js` | The tool. This is the deployed artefact. |
 | `harness.html` | Standalone dev rig — runs the tool outside Webflow. |
+| `success.html` | Dev rig for the success page branch. |
 | `test-matrix.mjs` | Node runner that walks every answer path headlessly. |
+| `test-success.mjs` | Node runner for the success-page handoff. |
 | `_style-snippet.txt` | The one CSS rule that must stay in the Webflow embed. |
+
+## Two pages, one script
+
+The same file runs on both the product overview page and the form success page,
+and decides which job to do by whether `#window-guide` exists.
+
+The form redirects to `/windows-advice-success`, so Webflow's inline
+`.w-form-done` block never appears — anything shown after conversion has to live
+on the success page. The guide writes the recommendation to `sessionStorage`
+under `wg_handoff` on submit; the success page reads it and renders the product
+links. Deliberately not a query string, so the redirect URL stays clean.
+
+The success page shows **all three recommended products**, not only the ones the
+customer ticked — they have already converted, so give them more to explore. The
+ticks are stored alongside in case that is revisited.
+
+Both success-page embeds need only a `#wg-done-links` div containing one
+`.wg-result-link` prototype, plus the same script tag.
 
 ## Deploying
 
@@ -83,8 +103,13 @@ can be checked without submitting anything.
 
 ```bash
 npm i jsdom
-node test-matrix.mjs
+node test-matrix.mjs     # all 336 answer paths
+node test-success.mjs    # success-page handoff
 ```
+
+`test-success.mjs` covers the normal handoff plus three failure modes: a direct
+visit with nothing stored, malformed JSON in storage, and an unknown product key.
+All three should degrade to no links rather than an empty box or an exception.
 
 Walks all 336 answer paths (3 × 4 × 4 × 7) through the real UI and reports:
 

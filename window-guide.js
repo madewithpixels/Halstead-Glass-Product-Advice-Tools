@@ -1,7 +1,77 @@
+/* Halstead Glass — Product Advice Guide
+ * v1.1.0
+ *
+ * Runs on two pages:
+ *   1. The product overview page, where #window-guide exists — the full tool.
+ *   2. The form success page, where it does not — renders the product links the
+ *      tool stashed on submit, and nothing else.
+ *
+ * Why the split: the form redirects to /windows-advice-success on success, so
+ * Webflow's inline .w-form-done block never appears. Anything shown "after
+ * conversion" has to live on the success page instead, and gets there via
+ * sessionStorage rather than a query string, so the redirect URL stays clean.
+ */
 window.Webflow = window.Webflow || [];
 window.Webflow.push(function () {
+
+  // Handoff between the two pages. sessionStorage rather than localStorage on
+  // purpose — it should not outlive the browsing session.
+  const HANDOFF_KEY = "wg_handoff";
+
+  // Needed by both the guide and the success page, so it is declared before the
+  // branch below.
+  const PRODUCT = {
+    rehau: { key: "rehau", name: "REHAU Flush uPVC Casement Windows", url: "/windows/rehau-upvc-windows", desc: "Excellent all-round performance and strong value with flush styling suited to many homes.", priceBand: "Cost-effective" },
+    quickslide: { key: "quickslide", name: "Quickslide uPVC Sliding Sash Windows", url: "/windows/quickslide-sash-windows", desc: "Traditional sash styling with modern performance and strong value.", priceBand: "Mid-range" },
+    masterframe: { key: "masterframe", name: "Masterframe NEOsash uPVC Windows", url: "/windows/masterframe-sash-windows", desc: "Premium timber-style sash appearance with long guarantees and modern engineering.", priceBand: "Mid-range" },
+    origin: { key: "origin", name: "Origin Aluminium Windows", url: "/windows/origin-aluminium-windows", desc: "Slim contemporary aluminium frames with exceptional durability and long guarantees.", priceBand: "Premium" },
+    granada: { key: "granada", name: "Granada Secondary Glazing", url: "/windows/granada-secondary-glazing", desc: "A discreet secondary pane that improves insulation and comfort while keeping existing windows.", priceBand: "Mid-range" }
+  };
+
+  // Clones the #wg-done-links prototype once per product key. Used by the
+  // success page, and by the inline fallback on the guide page.
+  function renderProductLinks(wrap, keys) {
+    if (!wrap) return false;
+    const proto = wrap.querySelector(".wg-result-link");
+    if (!proto) return false;
+    const template = proto.cloneNode(true);
+    const items = (keys || []).map(k => PRODUCT[k]).filter(Boolean);
+    Array.from(wrap.querySelectorAll(".wg-result-link")).forEach(el => el.remove());
+    if (!items.length) {
+      wrap.style.display = "none";
+      return false;
+    }
+    items.forEach(p => {
+      const a = template.cloneNode(true);
+      a.setAttribute("href", p.url);
+      a.textContent = p.name;
+      wrap.appendChild(a);
+    });
+    wrap.style.display = "";
+    return true;
+  }
+
   const guideEl = document.getElementById("window-guide");
-  if (!guideEl) return;
+
+  // ---------------------------------------------------------------------------
+  // SUCCESS PAGE BRANCH
+  // No #window-guide here. Show all three products the customer was recommended
+  // — not just the ones they ticked — so there is more to explore now they have
+  // already converted. The payload is left in place rather than cleared, so a
+  // page refresh still works; sessionStorage disappears with the tab anyway.
+  // ---------------------------------------------------------------------------
+  if (!guideEl) {
+    const wrap = document.getElementById("wg-done-links");
+    if (!wrap) return;
+    let payload = null;
+    try { payload = JSON.parse(sessionStorage.getItem(HANDOFF_KEY) || "null"); } catch (e) {}
+    const keys = payload && Array.isArray(payload.recommended) ? payload.recommended : [];
+    // Someone landing here directly, or with storage blocked, sees nothing
+    // rather than a broken or empty block.
+    if (!renderProductLinks(wrap, keys)) wrap.style.display = "none";
+    return;
+  }
+
   // ---------------------------------------------------------------------------
   // Auto-scroll when stepping through questions is OFF. The page stays put and
   // the user scrolls themselves. To re-enable, set AUTO_SCROLL to true — the
@@ -10,19 +80,12 @@ window.Webflow.push(function () {
   const AUTO_SCROLL = false;
   const SCROLL_GAP = 24;
   // ---------------------------------------------------------------------------
-  const PRODUCT = {
-    rehau: { key: "rehau", name: "REHAU Flush uPVC Casement Windows", url: "/windows/rehau-upvc-windows", desc: "Excellent all-round performance and strong value with flush styling suited to many homes.", priceBand: "Cost-effective" },
-    quickslide: { key: "quickslide", name: "Quickslide uPVC Sliding Sash Windows", url: "/windows/quickslide-sash-windows", desc: "Traditional sash styling with modern performance and strong value.", priceBand: "Mid-range" },
-    masterframe: { key: "masterframe", name: "Masterframe NEOsash uPVC Windows", url: "/windows/masterframe-sash-windows", desc: "Premium timber-style sash appearance with long guarantees and modern engineering.", priceBand: "Mid-range" },
-    origin: { key: "origin", name: "Origin Aluminium Windows", url: "/windows/origin-aluminium-windows", desc: "Slim contemporary aluminium frames with exceptional durability and long guarantees.", priceBand: "Premium" },
-    granada: { key: "granada", name: "Granada Secondary Glazing", url: "/windows/granada-secondary-glazing", desc: "A discreet secondary pane that improves insulation and comfort while keeping existing windows.", priceBand: "Mid-range" }
-  };
   const answers = { property: null, priority: null, budget: null, style: null };
   const STEP_KEYS = ["property", "priority", "budget", "style"];
   // ---------------------------------------------------------------------------
   // Working state lives here, NOT in the hidden form fields.
-  // Those fields now carry human-readable prose for the enquiry email, so they
-  // can no longer be parsed back into product keys. Anything the script needs to
+  // Those fields carry human-readable prose for the enquiry email, so they can
+  // no longer be parsed back into product keys. Anything the script needs to
   // remember between events is held in these two variables instead.
   //   lastRecommendedKeys — the three products we put in front of the customer
   //   defaultSelectedKeys — which of them were pre-ticked, so the email can say
@@ -73,30 +136,28 @@ window.Webflow.push(function () {
   const templateSrc = resultOptionsContainer ? resultOptionsContainer.querySelector(".wg-result-option") : null;
   const cardTemplate = templateSrc ? templateSrc.cloneNode(true) : null;
   // Product links deliberately do NOT appear on the result cards — sending
-  // people to a product page before they submit costs conversions. They are
-  // shown in the form success message instead. The Designer holds #wg-done-links
-  // containing one .wg-result-link prototype; it is captured and removed here,
-  // then cloned once per product on submit. To restyle those links, edit that
-  // element in the Designer.
+  // people to a product page before they submit costs conversions.
+  //
+  // With a redirect configured on the form (the current setup), the customer
+  // never sees this block — the success page renders the links instead, from the
+  // sessionStorage handoff written on submit. It is kept as a fallback for
+  // deployments with no redirect, where Webflow's inline .w-form-done shows.
   const doneLinksEl = document.getElementById("wg-done-links");
   let doneLinkProto = null;
   if (doneLinksEl) {
     const proto = doneLinksEl.querySelector(".wg-result-link");
-    if (proto) {
-      doneLinkProto = proto.cloneNode(true);
-      proto.remove();
-    }
+    if (proto) doneLinkProto = proto.cloneNode(true);
     doneLinksEl.style.display = "none";
   }
   const formEl = qs("form") || qs(".w-form form");
   // ---------------------------------------------------------------------------
-  // Hidden fields are OUTPUT ONLY. Each one becomes a labelled line in the
-  // Webflow notification email, using the field's name attribute as the label —
-  // which is why the names are single readable words. Webflow collapses newlines
-  // inside a single field value, so the summary is spread across fields rather
-  // than built as one block of text.
+  // Hidden fields are OUTPUT ONLY. Each becomes a labelled line in the Webflow
+  // notification email, using the field's name attribute as the label — which is
+  // why the names are single readable words. Webflow collapses newlines inside a
+  // single field value, so the summary is spread across fields rather than built
+  // as one block of text.
   //
-  // Set each of these in the Designer as an Input with custom attributes:
+  // Set each in the Designer as an Input with custom attributes:
   //   type = hidden
   //   name = Property   (etc.)
   // ---------------------------------------------------------------------------
@@ -389,23 +450,17 @@ window.Webflow.push(function () {
     set(hidden.selected,    selNames.length ? selNames.join(", ") : "(none ticked)");
     set(hidden.changed,     selectionLabel(selectedKeys));
   }
-  // Fills the success message with links to the products the customer asked
-  // about, so the "read more" journey happens after conversion, not before.
-  function populateDoneMessage(keys) {
-    if (!doneLinksEl || !doneLinkProto) return;
-    Array.from(doneLinksEl.querySelectorAll(".wg-result-link")).forEach(el => el.remove());
-    const items = (keys || []).map(k => PRODUCT[k]).filter(Boolean);
-    if (!items.length) {
-      doneLinksEl.style.display = "none";
-      return;
-    }
-    items.forEach(p => {
-      const a = doneLinkProto.cloneNode(true);
-      a.setAttribute("href", p.url);
-      a.textContent = p.name;
-      doneLinksEl.appendChild(a);
-    });
-    doneLinksEl.style.display = "";
+  // Hands the recommendation over to the success page. Stores all three
+  // recommended products, since that page offers everything worth exploring
+  // rather than only what was ticked. The ticks are stored alongside in case
+  // that decision is revisited. Fails silently where storage is unavailable.
+  function stashHandoff(selectedKeys) {
+    try {
+      sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({
+        recommended: lastRecommendedKeys,
+        selected: selectedKeys
+      }));
+    } catch (e) { /* private mode or storage disabled — links simply won't show */ }
   }
   // Fills one cloned card from the Designer template with a product's content.
   function buildCard(key, checked) {
@@ -524,8 +579,11 @@ window.Webflow.push(function () {
     formEl.addEventListener("submit", () => {
       const selectedKeys = collectSelections();
       writeSummary(lastRecommendedKeys, selectedKeys);
-      // Show links for what they ticked, falling back to what we recommended.
-      populateDoneMessage(selectedKeys.length ? selectedKeys : lastRecommendedKeys);
+      // Hand the recommendation to the success page before Webflow redirects.
+      stashHandoff(selectedKeys);
+      // Inline fallback for deployments with no redirect configured. With the
+      // redirect on, the customer navigates away before ever seeing this.
+      if (doneLinkProto) renderProductLinks(doneLinksEl, lastRecommendedKeys);
     });
   }
   if (startBtn) {

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Window Guide — success page harness</title>
+<style>
+  body { font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; color:#1c1c1c; margin:0; background:#f5f5f5; }
+  .wrap { max-width:680px; margin:0 auto; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#666; margin:0 0 20px; }
+  .panel { background:#fff; border:1px solid #dcdcdc; border-radius:6px; padding:18px; margin-bottom:18px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:#666; margin:0 0 12px; font-weight:600; }
+  #wg-done-links { padding:14px; background:#f0f7f0; border:1px solid #cfe0cf; border-radius:4px; }
+  .wg-result-link { display:block; color:#E4291E; margin:4px 0; text-decoration:none; font-weight:600; }
+  .wg-result-link:hover { text-decoration:underline; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+  pre { background:#fafafa; border:1px solid #eee; border-radius:4px; padding:10px; font-size:12px; overflow:auto; margin:0; }
+  a.back { color:#E4291E; }
+  .none { color:#888; font-style:italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Success page harness</h1>
+  <p class="sub">
+    Stands in for <span class="mono">/windows-advice-success</span>. There is deliberately no
+    <span class="mono">#window-guide</span> here, so the script takes its success-page branch and
+    renders links from the sessionStorage handoff.
+  </p>
+
+  <div class="panel">
+    <h2>Thanks — we'll be in touch</h2>
+    <p style="margin:0 0 12px">While you're waiting, here's more on what we recommended:</p>
+
+    <!-- Same structure as the Webflow page: a wrapper with one link prototype
+         inside it, which the script clones once per product. -->
+    <div id="wg-done-links">
+      <a href="#" class="wg-result-link">link prototype</a>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Handoff payload</h2>
+    <pre id="payload"></pre>
+    <p style="font-size:12px;color:#666;margin:10px 0 0">
+      Written by the guide on submit. If this is empty, complete the form on the
+      <a class="back" href="./harness.html">main harness</a> first — the harness blocks the actual
+      submission but the script's own handler still runs, which is exactly what happens in Webflow
+      before the redirect fires.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Script source</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input class="mono" id="src-url" style="flex:1;min-width:320px;padding:8px;border:1px solid #dcdcdc;border-radius:3px" value="./window-guide.js">
+      <button id="reload" style="background:#E4291E;color:#fff;border:0;border-radius:4px;padding:9px 16px;font-weight:600;cursor:pointer">Load</button>
+      <span id="state" style="font-size:12px;color:#666"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+window.Webflow = [];
+const PRISTINE = document.getElementById('wg-done-links').outerHTML;
+
+function showPayload() {
+  const raw = sessionStorage.getItem('wg_handoff');
+  document.getElementById('payload').textContent =
+    raw ? JSON.stringify(JSON.parse(raw), null, 2) : '(nothing stored)';
+}
+
+let el = null;
+function load(url) {
+  const state = document.getElementById('state');
+  state.textContent = 'loading…';
+  // Reset the links block so each load starts from the untouched prototype.
+  document.getElementById('wg-done-links').outerHTML = PRISTINE;
+  if (el) el.remove();
+  window.Webflow = [];
+  const s = document.createElement('script');
+  s.src = url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+  s.onload = () => {
+    const q = window.Webflow.slice();
+    window.Webflow = [];
+    q.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+    state.textContent = `loaded — ${q.length} init fn(s)`;
+    state.style.color = '#2b7a2b';
+    const links = document.querySelectorAll('#wg-done-links .wg-result-link');
+    if (!links.length) {
+      const w = document.getElementById('wg-done-links');
+      w.style.display = '';
+      w.innerHTML = '<span class="none">No links rendered — no handoff payload.</span>';
+    }
+    showPayload();
+  };
+  s.onerror = () => { state.textContent = 'failed to load'; state.style.color = '#b3261e'; };
+  document.body.appendChild(s);
+  el = s;
+}
+
+document.getElementById('reload').addEventListener('click', () =>
+  load(document.getElementById('src-url').value.trim()));
+
+showPayload();
+load('./window-guide.js');
+</script>
+</body>
+</html>
