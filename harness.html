@@ -241,9 +241,10 @@ const PRISTINE = document.getElementById('guide-host').innerHTML;
 // style mismatches in the matrix — it is NOT used by the guide itself. If the
 // styles list in the script changes, update this too or the flags will lie.
 const STYLE_SUPPORT = {
-  "REHAU Flush uPVC Casement Windows":      ["casement","bay"],
+  "Liniar uPVC Casement Windows":           ["casement","bay"],
+  "REHAU Rio Flush uPVC Casement Windows":  ["casement","bay"],
   "Quickslide uPVC Sliding Sash Windows":   ["sash"],
-  "Masterframe NEOsash uPVC Windows":       ["sash"],
+  "Masterframe uPVC Sash Windows":          ["sash"],
   "Origin Aluminium Windows":               ["casement","tilt_turn","bay","gable"],
   "Granada Secondary Glazing":              ["secondary"]
 };
@@ -323,10 +324,13 @@ function runOne(combo) {
   const names = recommended === "(none)" ? [] : recommended.split(", ").filter(Boolean);
   const style = combo[3];
   // "guide" means no specific style was requested, so nothing to mismatch.
-  const mismatch = style !== "guide" &&
-    names.length > 0 &&
-    !names.some(n => (STYLE_SUPPORT[n] || []).includes(style));
-  return { combo, names, recommended, count: names.length, mismatch };
+  // Otherwise strict: every product returned must do the requested style. The
+  // one sanctioned exception is Granada in a conservation area.
+  const offenders = style === "guide" ? [] : names.filter(n =>
+    !(STYLE_SUPPORT[n] || []).includes(style) &&
+    !(n === "Granada Secondary Glazing" && combo[0] === "conservation")
+  );
+  return { combo, names, recommended, count: names.length, offenders, mismatch: offenders.length > 0 };
 }
 
 function runMatrix() {
@@ -349,17 +353,17 @@ function runMatrix() {
 function renderStats() {
   const appear = {};
   Object.keys(STYLE_SUPPORT).forEach(n => appear[n] = 0);
-  let short = 0, flagged = 0;
+  let empty = 0, flagged = 0;
   matrixRows.forEach(r => {
     r.names.forEach(n => { appear[n] = (appear[n] || 0) + 1; });
-    if (r.count < 3) short++;
+    if (r.count === 0) empty++;
     if (r.mismatch) flagged++;
   });
   const never = Object.entries(appear).filter(([,v]) => v === 0).map(([k]) => k);
   document.getElementById('matrix-stats').innerHTML =
     `<span class="stat"><b>${matrixRows.length}</b>paths</span>` +
     `<span class="stat"><b class="${flagged?'warn':''}">${flagged}</b>style mismatches</span>` +
-    `<span class="stat"><b class="${short?'warn':''}">${short}</b>fewer than 3 results</span>` +
+    `<span class="stat"><b class="${empty?'warn':''}">${empty}</b>paths with no results</span>` +
     `<span class="stat"><b class="${never.length?'warn':''}">${never.length}</b>products never shown</span>` +
     `<div style="margin-top:10px;font-size:12px;color:#555">` +
       Object.entries(appear).sort((a,b)=>b[1]-a[1])

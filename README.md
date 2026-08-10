@@ -1,8 +1,8 @@
 # Halstead Glass — Product Advice Guide
 
 Interactive advice tool embedded on Webflow product overview pages. Asks four
-questions, scores the product range against the answers, and presents the top
-three with a lead capture form.
+questions, scores the product range against the answers, and presents up to
+three recommendations with a lead capture form.
 
 Live on `/windows/windows-overview`.
 
@@ -43,7 +43,7 @@ The Webflow page needs an HTML Embed containing:
 <style>
   #window-guide .wg-result-checkbox { accent-color: #E4291E; }
 </style>
-<script src="https://cdn.jsdelivr.net/gh/madewithpixels/Halstead-Glass-Product-Advice-Tools@v1.0.0/window-guide.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/madewithpixels/Halstead-Glass-Product-Advice-Tools@v1.2.0/window-guide.js"></script>
 ```
 
 Pin to a **tag**, not a branch. jsDelivr caches branch URLs aggressively and you
@@ -107,26 +107,39 @@ node test-matrix.mjs     # all 336 answer paths
 node test-success.mjs    # success-page handoff
 ```
 
-`test-success.mjs` covers the normal handoff plus three failure modes: a direct
-visit with nothing stored, malformed JSON in storage, and an unknown product key.
-All three should degrade to no links rather than an empty box or an exception.
+`test-success.mjs` covers the normal handoff plus four edge cases: a direct visit
+with nothing stored, malformed JSON in storage, an unknown product key, and a
+payload containing Liniar, which has no product page and must be dropped from the
+links without taking the rest of the block with it. The failure modes should
+degrade to no links rather than an empty box or an exception.
 
-Walks all 336 answer paths (3 × 4 × 4 × 7) through the real UI and reports:
+`test-matrix.mjs` walks all 336 answer paths (3 × 4 × 4 × 7) through the real UI
+and reports:
 
 - how often each product is recommended
 - any product that never appears
-- any path returning fewer than three results
-- any path where the customer named a style and nothing recommended supports it
+- any path returning no results at all
+- any path returning a product that does not support the requested style
+- any path whose result count differs from what the style should produce
 
-Last run — 336 paths, 0 style mismatches, 0 short results:
+That last check replaced a flat "fewer than three results" check when the
+backfill was removed. Expected counts are asserted per style against `EXPECTED`
+in the runner — keep it in step with `META.styles`.
+
+Last run — 336 paths, 0 style mismatches, 0 empty results, 0 unexpected counts.
+Result counts: 3 results × 160 paths, 2 × 64, 1 × 112.
 
 | Product | Appears in |
 |---|---|
-| Origin Aluminium Windows | 248 (73.8%) |
-| Masterframe NEOsash uPVC Windows | 223 (66.4%) |
-| Quickslide uPVC Sliding Sash Windows | 203 (60.4%) |
-| REHAU Flush uPVC Casement Windows | 190 (56.5%) |
+| Origin Aluminium Windows | 196 (58.3%) |
 | Granada Secondary Glazing | 144 (42.9%) |
+| REHAU Rio Flush uPVC Casement Windows | 123 (36.6%) |
+| Liniar uPVC Casement Windows | 93 (27.7%) |
+| Quickslide uPVC Sliding Sash Windows | 82 (24.4%) |
+| Masterframe uPVC Sash Windows | 82 (24.4%) |
+
+Percentages dropped across the board versus the pre-backfill figures because
+fewer cards are shown overall, not because any product was demoted.
 
 Note that `STYLE_SUPPORT` in both `harness.html` and `test-matrix.mjs` mirrors
 `META.styles` from the tool. It exists only to flag mismatches in testing. If the
@@ -137,15 +150,46 @@ styles list changes in `window-guide.js`, update those copies or the flags lie.
 Scoring lives in `propertyScores()`, `priorityScores()` and `budgetFit()`, with
 `META` holding each product's price band, supported styles and material.
 
-Two deliberate behaviours to know before changing anything:
+Four deliberate behaviours to know before changing anything:
 
-1. **Granada is force-eligible whenever property = conservation**, regardless of
+1. **There is no backfill.** Only products that support the requested style are
+   ever recommended, so the number of cards varies: casement 3, bay 3, sash 2,
+   tilt & turn 1, gable 1, secondary glazing 1, "guide me" 3 — one higher in a
+   conservation area, where Granada joins every style bar secondary. Client
+   instruction, August 2026: "no point showing the user something they haven't
+   asked for". Padding a sash enquiry with an aluminium casement was the old
+   behaviour and it is not coming back.
+2. **Granada is force-eligible whenever property = conservation**, regardless of
    the style asked for, and the +5 conservation weight usually puts it top. A
-   conscious commercial choice, under review pending client feedback on the
-   enquiries it produces. Note the matrix confirms this does not crowd out the
-   requested style — a sash request still returns sash products alongside it.
-2. **Budget "open" returns 0 for every product** (`BUDGET_TARGET.open = null`),
+   conscious commercial choice, kept when the backfill was removed because
+   secondary glazing is genuinely the answer where replacement is not permitted.
+   The matrix confirms it does not crowd out the requested style — a sash request
+   still returns sash products alongside it.
+3. **Liniar has no product page** (`PRODUCT.liniar.url` is `null`). It is sold
+   but not published, by client decision, so it is recommended in the guide and
+   silently omitted from the success-page links. If a page is ever added, setting
+   the URL is the only change needed.
+4. **Budget "open" returns 0 for every product** (`BUDGET_TARGET.open = null`),
    so that answer deliberately has no influence on ranking.
+
+### The casement ladder
+
+The client specified the casement ordering directly, and it falls out of the
+band weights rather than being special-cased. `budgetFit()` scores +3 for an
+exact band match, 0 for one band out and −3 for two, which produces:
+
+| Casement + budget | Order |
+|---|---|
+| Most cost-effective | Liniar, REHAU, Origin |
+| Mid-range | REHAU, then Liniar or Origin on the other answers |
+| Premium finish | Origin, REHAU, Liniar |
+
+So moving a product between bands in `META` is the lever for repositioning it —
+that is how REHAU went from budget to mid in v1.2.0.
+
+Cards are pre-ticked by `preTick` in `renderResults()`: the leaders, but never
+every card, so the customer can see the choice is theirs. That means 2 of 3, 1 of
+2, and 1 of 1 where a single product is the only honest answer.
 
 Hidden fields are **output only**. The script holds working state in
 `lastRecommendedKeys` and `defaultSelectedKeys`. Do not go back to reading

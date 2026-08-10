@@ -31,3 +31,11 @@ console.log('bad payload -> links:', w.document.querySelectorAll('#wg-done-links
 // 4. unknown product key
 w = boot('./success.html', JSON.stringify({recommended:['nonexistent','origin']}));
 console.log('unknown key -> links:', w.document.querySelectorAll('#wg-done-links .wg-result-link').length, '(should be 1, bad key dropped)');
+
+// 5. Liniar is recommended but has no product page, so it must be dropped from
+//    the links without taking the rest of the block with it.
+w = boot('./success.html', JSON.stringify({recommended:['liniar','rehau','origin'], selected:['liniar','rehau']}));
+links = [...w.document.querySelectorAll('#wg-done-links .wg-result-link')];
+console.log('liniar+2    -> links:', links.length, '(should be 2, Liniar has no page)');
+console.log('   Liniar absent:', links.every(a => !/Liniar/.test(a.textContent)) ? 'YES' : 'NO');
+console.log('   others intact:', links.map(a => a.textContent).join(' | '));

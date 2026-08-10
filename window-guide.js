@@ -1,5 +1,5 @@
 /* Halstead Glass — Product Advice Guide
- * v1.1.0
+ * v1.2.0
  *
  * Runs on two pages:
  *   1. The product overview page, where #window-guide exists — the full tool.
@@ -21,9 +21,10 @@ window.Webflow.push(function () {
   // Needed by both the guide and the success page, so it is declared before the
   // branch below.
   const PRODUCT = {
-    rehau: { key: "rehau", name: "REHAU Flush uPVC Casement Windows", url: "/windows/rehau-upvc-windows", desc: "Excellent all-round performance and strong value with flush styling suited to many homes.", priceBand: "Cost-effective" },
+    liniar: { key: "liniar", name: "Liniar uPVC Casement Windows", url: null, desc: "Our most cost-effective range. Clean, well-proportioned casements that sit comfortably on both modern and period homes.", priceBand: "Cost-effective" },
+    rehau: { key: "rehau", name: "REHAU Rio Flush uPVC Casement Windows", url: "/windows/rehau-upvc-windows", desc: "German-engineered flush casements with a timber look, slim sightlines and excellent thermal performance.", priceBand: "Mid-range" },
     quickslide: { key: "quickslide", name: "Quickslide uPVC Sliding Sash Windows", url: "/windows/quickslide-sash-windows", desc: "Traditional sash styling with modern performance and strong value.", priceBand: "Mid-range" },
-    masterframe: { key: "masterframe", name: "Masterframe NEOsash uPVC Windows", url: "/windows/masterframe-sash-windows", desc: "Premium timber-style sash appearance with long guarantees and modern engineering.", priceBand: "Mid-range" },
+    masterframe: { key: "masterframe", name: "Masterframe uPVC Sash Windows", url: "/windows/masterframe-sash-windows", desc: "Premium timber-style sash appearance with long guarantees and modern engineering.", priceBand: "Mid-range" },
     origin: { key: "origin", name: "Origin Aluminium Windows", url: "/windows/origin-aluminium-windows", desc: "Slim contemporary aluminium frames with exceptional durability and long guarantees.", priceBand: "Premium" },
     granada: { key: "granada", name: "Granada Secondary Glazing", url: "/windows/granada-secondary-glazing", desc: "A discreet secondary pane that improves insulation and comfort while keeping existing windows.", priceBand: "Mid-range" }
   };
@@ -35,7 +36,10 @@ window.Webflow.push(function () {
     const proto = wrap.querySelector(".wg-result-link");
     if (!proto) return false;
     const template = proto.cloneNode(true);
-    const items = (keys || []).map(k => PRODUCT[k]).filter(Boolean);
+    // Products with url: null have no page on the site — Liniar is sold but not
+    // published, so it is recommended in the guide and simply omitted here
+    // rather than linked somewhere vague.
+    const items = (keys || []).map(k => PRODUCT[k]).filter(p => p && p.url);
     Array.from(wrap.querySelectorAll(".wg-result-link")).forEach(el => el.remove());
     if (!items.length) {
       wrap.style.display = "none";
@@ -55,7 +59,7 @@ window.Webflow.push(function () {
 
   // ---------------------------------------------------------------------------
   // SUCCESS PAGE BRANCH
-  // No #window-guide here. Show all three products the customer was recommended
+  // No #window-guide here. Show every product the customer was recommended
   // — not just the ones they ticked — so there is more to explore now they have
   // already converted. The payload is left in place rather than cleared, so a
   // page refresh still works; sessionStorage disappears with the tab anyway.
@@ -87,7 +91,7 @@ window.Webflow.push(function () {
   // Those fields carry human-readable prose for the enquiry email, so they can
   // no longer be parsed back into product keys. Anything the script needs to
   // remember between events is held in these two variables instead.
-  //   lastRecommendedKeys — the three products we put in front of the customer
+  //   lastRecommendedKeys — the products we put in front of the customer
   //   defaultSelectedKeys — which of them were pre-ticked, so the email can say
   //                         whether the customer actively chose or just left it
   // ---------------------------------------------------------------------------
@@ -112,13 +116,14 @@ window.Webflow.push(function () {
   };
   // --- Recommendation model metadata ---
   const META = {
-    rehau:       { band: 1, styles: ["casement", "bay"], material: "uPVC" },
+    liniar:      { band: 1, styles: ["casement", "bay"], material: "uPVC" },
+    rehau:       { band: 2, styles: ["casement", "bay"], material: "uPVC" },
     quickslide:  { band: 2, styles: ["sash"], material: "uPVC" },
     masterframe: { band: 2, styles: ["sash"], material: "uPVC" },
     origin:      { band: 3, styles: ["casement", "tilt_turn", "bay", "gable"], material: "Aluminium" },
     granada:     { band: 2, styles: ["secondary"], material: "Secondary glazing" }
   };
-  const PRODUCT_ORDER = ["rehau", "quickslide", "masterframe", "origin", "granada"];
+  const PRODUCT_ORDER = ["liniar", "rehau", "quickslide", "masterframe", "origin", "granada"];
   const BUDGET_TARGET = { cost_effective: 1, mid_range: 2, premium: 3, open: null };
   const qs = (sel, root = guideEl) => root.querySelector(sel);
   const qsa = (sel, root = guideEl) => Array.from(root.querySelectorAll(sel));
@@ -137,6 +142,8 @@ window.Webflow.push(function () {
   const cardTemplate = templateSrc ? templateSrc.cloneNode(true) : null;
   // Product links deliberately do NOT appear on the result cards — sending
   // people to a product page before they submit costs conversions.
+  // Note Liniar has no product page at all (PRODUCT.liniar.url is null), so it
+  // never appears in these links even when it was recommended.
   //
   // With a redirect configured on the form (the current setup), the customer
   // never sees this block — the success page renders the links instead, from the
@@ -329,22 +336,22 @@ window.Webflow.push(function () {
     clearOutputFields();
   }
   function propertyScores() {
-    const s = { rehau: 0, quickslide: 0, masterframe: 0, origin: 0, granada: 0 };
+    const s = { liniar: 0, rehau: 0, quickslide: 0, masterframe: 0, origin: 0, granada: 0 };
     switch (answers.property) {
       case "period":
-        s.masterframe += 3; s.quickslide += 2; s.rehau += 1; s.granada += 1; break;
+        s.masterframe += 3; s.quickslide += 2; s.rehau += 1; s.granada += 1; s.liniar += 1; break;
       case "modern":
-        s.origin += 3; s.rehau += 2; break;
+        s.origin += 3; s.rehau += 2; s.liniar += 1; break;
       case "conservation":
         s.granada += 5; s.masterframe += 1; s.quickslide += 1; break;
     }
     return s;
   }
   function priorityScores() {
-    const s = { rehau: 0, quickslide: 0, masterframe: 0, origin: 0, granada: 0 };
+    const s = { liniar: 0, rehau: 0, quickslide: 0, masterframe: 0, origin: 0, granada: 0 };
     switch (answers.priority) {
       case "value":
-        s.rehau += 3; s.quickslide += 2; s.granada += 1; break;
+        s.liniar += 3; s.rehau += 2; s.quickslide += 2; s.granada += 1; break;
       case "traditional":
         s.masterframe += 3; s.quickslide += 2; s.rehau += 1; break;
       case "contemporary":
@@ -363,11 +370,12 @@ window.Webflow.push(function () {
   function scoreProducts() {
     const prop = propertyScores();
     const pri = priorityScores();
-    const score = { rehau: 0, quickslide: 0, masterframe: 0, origin: 0, granada: 0 };
+    const score = { liniar: 0, rehau: 0, quickslide: 0, masterframe: 0, origin: 0, granada: 0 };
     PRODUCT_ORDER.forEach(k => { score[k] = prop[k] + pri[k] + budgetFit(k); });
     if (answers.property === "conservation") {
       score.origin -= 4;
       score.rehau  -= 2;
+      score.liniar -= 3; // standard casement reads less sympathetically than flush
     }
     return score;
   }
@@ -450,8 +458,8 @@ window.Webflow.push(function () {
     set(hidden.selected,    selNames.length ? selNames.join(", ") : "(none ticked)");
     set(hidden.changed,     selectionLabel(selectedKeys));
   }
-  // Hands the recommendation over to the success page. Stores all three
-  // recommended products, since that page offers everything worth exploring
+  // Hands the recommendation over to the success page. Stores every
+  // recommended product, since that page offers everything worth exploring
   // rather than only what was ticked. The ticks are stored alongside in case
   // that decision is revisited. Fails silently where storage is unavailable.
   function stashHandoff(selectedKeys) {
@@ -511,16 +519,22 @@ window.Webflow.push(function () {
   function renderResults() {
     if (!resultEl || !resultOptionsContainer || !cardTemplate) return;
     const score = scoreProducts();
-    const eligible = rankByScore(PRODUCT_ORDER.filter(k => styleEligible(k)), score);
-    const backfill = rankByScore(
-      PRODUCT_ORDER.filter(k => !eligible.includes(k) && (k !== "granada" || answers.property === "conservation")),
-      score
-    );
-    const top3 = [...eligible, ...backfill].slice(0, 3);
-    lastRecommendedKeys = top3.slice();
+    // Up to three, but ONLY products that actually do the style the customer
+    // asked for. There is deliberately no backfill: if a style is covered by one
+    // supplier, one card is the honest answer. Showing a fourth-best product
+    // that cannot be made in the requested style was padding, and padding costs
+    // trust. Result counts by style: casement 3, bay 3, sash 2, tilt & turn 1,
+    // gable 1, secondary 1, "guide me" 3. Conservation adds Granada throughout,
+    // so those counts are one higher there — see styleEligible().
+    const top = rankByScore(PRODUCT_ORDER.filter(k => styleEligible(k)), score).slice(0, 3);
+    lastRecommendedKeys = top.slice();
     resultOptionsContainer.innerHTML = "";
-    top3.forEach((key, index) => {
-      resultOptionsContainer.appendChild(buildCard(key, index < 2));
+    // Pre-tick the leaders, but never every card — leaving the last one unticked
+    // keeps the choice visibly the customer's. With a single result that would
+    // tick nothing, so one result is pre-ticked.
+    const preTick = top.length <= 1 ? 1 : Math.min(2, top.length - 1);
+    top.forEach((key, index) => {
+      resultOptionsContainer.appendChild(buildCard(key, index < preTick));
     });
     resultEl.style.display = "";
     setProgressResults();
