@@ -1,5 +1,20 @@
-/* written by Claude — 2026-07-17 — window guide.
-   accent-color has no Webflow Style panel control, so this one declaration has
-   to live here to make the card tick red. Everything else about the result card
-   is a real element in the Designer (Result Card Template) — style it there. */
+/* written by Claude — 2026-07-17, updated 2026-08-10 — window guide.
+   Two declarations that cannot be expressed in the Webflow Style panel. Anything
+   else about the result card is a real element in the Designer (Result Card
+   Template) — style it there. */
+
+  /* accent-color has no Style panel control, and this is what makes the card
+     tick red rather than browser blue. */
   #window-guide .wg-result-checkbox { accent-color: #E4291E; }
+
+  /* From v1.2.0 the guide returns as few as one card, because it no longer pads
+     the results with products that cannot be made in the requested style. The
+     Designer grid is three fixed tracks, so one card landed in the left third
+     with two-thirds of empty space beside it. auto-fit collapses the unused
+     tracks and justify-content centres what remains, so 1, 2 and 3 cards all sit
+     centred. Three cards render exactly as before. 357px is the Designer's own
+     track width — change it there and change it here. */
+  #window-guide .wg-result-options {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 357px));
+    justify-content: center;
+  }

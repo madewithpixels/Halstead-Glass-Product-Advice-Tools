@@ -15,7 +15,7 @@ Live on `/windows/windows-overview`.
 | `success.html` | Dev rig for the success page branch. |
 | `test-matrix.mjs` | Node runner that walks every answer path headlessly. |
 | `test-success.mjs` | Node runner for the success-page handoff. |
-| `_style-snippet.txt` | The one CSS rule that must stay in the Webflow embed. |
+| `_style-snippet.txt` | The two CSS rules that must stay in the Webflow embed. |
 
 ## Two pages, one script
 
@@ -42,6 +42,10 @@ The Webflow page needs an HTML Embed containing:
 ```html
 <style>
   #window-guide .wg-result-checkbox { accent-color: #E4291E; }
+  #window-guide .wg-result-options {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 357px));
+    justify-content: center;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/gh/madewithpixels/Halstead-Glass-Product-Advice-Tools@v1.2.0/window-guide.js"></script>
 ```
